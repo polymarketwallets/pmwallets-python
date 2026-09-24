@@ -12,8 +12,13 @@ license = "MIT"
 keywords = ["polymarket", "copy-trading", "wallet-tracker", "smart-money", "pmwallets", "prediction-markets"]
 dependencies = ["httpx>=0.27", "websockets>=15"]
 
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
 [project.urls]
 Homepage = "https://pmwallets.com/docs"
+Repository = "https://github.com/polymarketwallets/pmwallets-python"
+Issues = "https://github.com/polymarketwallets/pmwallets-python/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pmwallets"]
