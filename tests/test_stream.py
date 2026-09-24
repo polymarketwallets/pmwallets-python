@@ -53,9 +53,13 @@ class FakeClient:
     api_key = "pmw_x_y"
     ws_url = "wss://example/v1/ws"
 
-    def __init__(self, ledger):
+    def __init__(self, ledger, head=9):
         self.ledger = ledger
         self.replays = []
+        self.head = head
+
+    async def latency(self):
+        return {"head": {"block": self.head}}
 
     async def fills_since(self, c):
         self.replays.append(dict(c))
@@ -64,9 +68,9 @@ class FakeClient:
                 yield f
 
 
-def harness(ledger, fail_on=None, refuse=None):
+def harness(ledger, fail_on=None, refuse=None, head=9):
     sockets, delivered, events = [], [], []
-    client = FakeClient(ledger)
+    client = FakeClient(ledger, head)
     state = {"fail": fail_on}
 
     @contextlib.asynccontextmanager
@@ -176,16 +180,18 @@ async def test_reports_takeover():
     await stream.stop()
 
 
-async def test_no_replay_of_all_history_without_a_cursor():
-    stream, sockets, client, _, events = harness([fill(5, 1)])
+async def test_anchors_at_the_chain_head_on_first_hello():
+    ledger = [fill(99, 3), fill(101, 1)]  # 99 is history from before we started
+    stream, sockets, client, delivered, _ = harness(ledger, head=100)
     await stream.start(); await tick()
     sockets[0].send({"type": "hello", "session": "A", "seq": 0})
     await tick()
+    assert (stream.position.block, stream.position.logIndex) == (99, 0xFFFFFFFF)
     sockets[0].remote_close(1006); await tick()
     sockets[1].send({"type": "hello", "session": "B", "seq": 0})
     await tick()
-    assert client.replays == []
-    assert any(e["type"] == "gap" and e.get("skipped") == "no_cursor" for e in events)
+    assert client.replays == [{"sinceBlock": 99, "sinceLogIndex": 0xFFFFFFFF}]
+    assert [d[0] for d in delivered] == [ledger[1]["eventId"]]
     await stream.stop()
 
 

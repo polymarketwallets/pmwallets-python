@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import math
 import os
 from collections import OrderedDict
 from dataclasses import asdict, dataclass
@@ -141,9 +142,10 @@ class FillStream:
         self.min_backoff = min_backoff
         self.max_backoff = max_backoff
         self.seen_capacity = seen_capacity
-        # Before the first fill is delivered there is no position to replay from, and replaying from zero
-        # returns every fill since each subscription began. Default: skip it (a live consumer such as a
-        # copy bot has no use for history). True = get the full backlog.
+        # Where to start when there is no saved position. Default False: at the first connection the cursor
+        # is anchored at the current chain head, so a disconnect before the first fill is still replayed —
+        # but the history from before you started is not. True: start from zero and receive every fill
+        # since each subscription began.
         self.replay_without_cursor = replay_without_cursor
         self.connector = connector or websockets_connector(ping_interval, **(ws_options or {}))
         self.state = StreamState()
@@ -256,7 +258,9 @@ class FillStream:
         if m.get("type") == "hello" and isinstance(m.get("session"), str):
             # A new session means the socket (or this process) was down: replay BEFORE adopting it —
             # adopting first is what silently swallows an outage.
-            if self.state.session is not None and m["session"] != self.state.session:
+            if self.state.block == 0 and not self.replay_without_cursor:
+                await self._anchor()
+            elif self.state.session is not None and m["session"] != self.state.session:
                 await self._replay("new_session")
             self.state.session = m["session"]
             self.state.seq = int(m.get("seq") or 0)
@@ -273,10 +277,24 @@ class FillStream:
         self.state.seq = m["seq"]
         await self.store.save(self.state)
 
+    async def _anchor(self) -> None:
+        """No position yet: take the chain head as the starting point. Without it a disconnect before the first
+        fill could not be replayed, and replaying from zero would hand over every fill since each subscription began."""
+        r = await self.client.latency()
+        raw = (r.get("head") or {}).get("block") if isinstance(r, dict) else None
+        try:
+            head = float(raw) if raw is not None and not isinstance(raw, bool) else math.nan
+        except (TypeError, ValueError):
+            head = math.nan
+        if not (math.isfinite(head) and head == int(head) and head > 0):
+            raise RuntimeError("could not read the chain head to anchor the stream")
+        head = int(head)
+        # strictly-after semantics: everything from the head block on
+        self.state.block = head - 1
+        self.state.logIndex = 0xFFFFFFFF
+        self._emit({"type": "anchored", "block": head})
+
     async def _replay(self, reason: str) -> None:
-        if self.state.block == 0 and not self.replay_without_cursor:
-            self._emit({"type": "gap", "reason": reason, "fromBlock": 0, "fromLogIndex": 0, "skipped": "no_cursor"})
-            return
         self._emit({"type": "gap", "reason": reason, "fromBlock": self.state.block, "fromLogIndex": self.state.logIndex})
         delivered = 0
         async for fill in self.client.fills_since({"sinceBlock": self.state.block, "sinceLogIndex": self.state.logIndex}):
