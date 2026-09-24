@@ -24,7 +24,7 @@ pip install pmwallets     # Python ≥ 3.10
 | `FillStream` | asyncio WebSocket，自动重连与保活；按 `session`/`seq` 发现漏帧并从最后送达的成交补发；按 `eventId` 去重；首次启动锚定在链头之后；游标持久化 |
 | `verify_webhook(raw_body, signature, secret)` | 校验 `x-pmw-signature`（原始 body 的 HMAC-SHA256） |
 
-每个账户只有一条推送流，后连上的会顶掉先连的。支持 `HTTPS_PROXY`。
+每个账户只有一条推送流。API key 建立的连接优先于 pmwallets.com 的推送页；两条 API 连接之间仍是后连的顶掉先连的。支持 `HTTPS_PROXY`。
 
 ## 相关链接
 

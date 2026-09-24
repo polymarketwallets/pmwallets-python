@@ -49,7 +49,7 @@ asyncio.run(main())
 | `FillStream` | asyncio WebSocket with reconnect and keep-alive; detects missed frames by `session`/`seq` and replays them from the last fill delivered; de-duplicates by `eventId`; anchors behind the chain head on first start; persisted cursor |
 | `verify_webhook(raw_body, signature, secret)` | checks `x-pmw-signature` (HMAC-SHA256 of the raw body) |
 
-One stream per account: the newest connection wins, so run one consumer per API account. `HTTPS_PROXY` is honoured.
+One stream per account. An API-key connection takes priority over the pmwallets.com feed page (the page never takes the stream from it); between two API connections the newest wins, so run one consumer per account. `HTTPS_PROXY` is honoured.
 
 ## Resources
 
