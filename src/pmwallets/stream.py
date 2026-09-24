@@ -134,6 +134,7 @@ class FillStream:
         connector: Optional[Connector] = None,
         ws_options: Optional[dict[str, Any]] = None,
         replay_without_cursor: bool = False,
+        anchor_lag_blocks: int = 200,
     ) -> None:
         self.client = client
         self.on_fill = on_fill
@@ -147,6 +148,10 @@ class FillStream:
         # but the history from before you started is not. True: start from zero and receive every fill
         # since each subscription began.
         self.replay_without_cursor = replay_without_cursor
+        # How far behind the chain head to anchor (~5 min). The head can run ahead of the fills already indexed for
+        # your account; anchoring exactly at it could exclude a fill mined earlier but not yet pushed. The extra
+        # blocks are replayed at most once more and dropped by eventId.
+        self.anchor_lag_blocks = anchor_lag_blocks
         self.connector = connector or websockets_connector(ping_interval, **(ws_options or {}))
         self.state = StreamState()
         self._seen: "OrderedDict[str, bool]" = OrderedDict()
@@ -289,10 +294,10 @@ class FillStream:
         if not (math.isfinite(head) and head == int(head) and head > 0):
             raise RuntimeError("could not read the chain head to anchor the stream")
         head = int(head)
-        # strictly-after semantics: everything from the head block on
-        self.state.block = head - 1
+        # strictly-after semantics: everything from (head − lag) on; never 0, which means "no position"
+        self.state.block = max(1, head - self.anchor_lag_blocks - 1)
         self.state.logIndex = 0xFFFFFFFF
-        self._emit({"type": "anchored", "block": head})
+        self._emit({"type": "anchored", "block": self.state.block + 1})
 
     async def _replay(self, reason: str) -> None:
         self._emit({"type": "gap", "reason": reason, "fromBlock": self.state.block, "fromLogIndex": self.state.logIndex})

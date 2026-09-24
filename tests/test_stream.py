@@ -53,7 +53,7 @@ class FakeClient:
     api_key = "pmw_x_y"
     ws_url = "wss://example/v1/ws"
 
-    def __init__(self, ledger, head=9):
+    def __init__(self, ledger, head=209):
         self.ledger = ledger
         self.replays = []
         self.head = head
@@ -68,7 +68,7 @@ class FakeClient:
                 yield f
 
 
-def harness(ledger, fail_on=None, refuse=None, head=9):
+def harness(ledger, fail_on=None, refuse=None, head=209):
     sockets, delivered, events = [], [], []
     client = FakeClient(ledger, head)
     state = {"fail": fail_on}
@@ -180,18 +180,21 @@ async def test_reports_takeover():
     await stream.stop()
 
 
-async def test_anchors_at_the_chain_head_on_first_hello():
-    ledger = [fill(99, 3), fill(101, 1)]  # 99 is history from before we started
-    stream, sockets, client, delivered, _ = harness(ledger, head=100)
+async def test_anchors_behind_the_chain_head_on_first_hello():
+    # head 300, lag 200 → replay covers blocks ≥ 100. Block 99 is history; block 150 was mined before we connected
+    # but had not been pushed yet (the head ran ahead of the fill index).
+    ledger = [fill(99, 3), fill(150, 1), fill(301, 1)]
+    stream, sockets, client, delivered, events = harness(ledger, head=300)
     await stream.start(); await tick()
     sockets[0].send({"type": "hello", "session": "A", "seq": 0})
     await tick()
     assert (stream.position.block, stream.position.logIndex) == (99, 0xFFFFFFFF)
+    assert {"type": "anchored", "block": 100} in events
     sockets[0].remote_close(1006); await tick()
     sockets[1].send({"type": "hello", "session": "B", "seq": 0})
     await tick()
     assert client.replays == [{"sinceBlock": 99, "sinceLogIndex": 0xFFFFFFFF}]
-    assert [d[0] for d in delivered] == [ledger[1]["eventId"]]
+    assert [d[0] for d in delivered] == [ledger[1]["eventId"], ledger[2]["eventId"]]
     await stream.stop()
 
 
