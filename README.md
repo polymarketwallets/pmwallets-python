@@ -51,7 +51,7 @@ asyncio.run(main())
 
 One stream per account. An API-key connection takes priority over the pmwallets.com feed page (the page never takes the stream from it); between two API connections the newest wins, so run one consumer per account. `HTTPS_PROXY` is honoured.
 
-PMWallets' servers are in the United Kingdom: a consumer hosted in the UK or elsewhere in Europe receives fills soonest.
+PMWallets' servers are in the United Kingdom. A consumer that also trades on Polymarket should run from Ireland (AWS eu-west-1): Polymarket does not accept API orders from the UK, the US and several EU countries.
 
 ## Resources
 
