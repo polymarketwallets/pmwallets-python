@@ -53,6 +53,19 @@ One stream per account. An API-key connection takes priority over the pmwallets.
 
 PMWallets' servers are in the United Kingdom. A consumer that also trades on Polymarket should run from Ireland (AWS eu-west-1): Polymarket does not accept API orders from the UK, the US and several EU countries.
 
+## Trade-history exports
+
+A purchase is access to files: one zstd-compressed CSV per wallet per UTC day, downloadable at once and again later.
+
+```python
+order = client.create_export(["0x…"], "2026-09-01", "2026-09-30")
+for f in client.export_files(order["id"])["files"]:
+    data = client.download_export_file(f["wallet"], f["day"])  # .csv.zst
+    # pandas: pd.read_csv(io.BytesIO(data), compression="zstd")
+```
+
+`export_file_url(wallet, day)` returns the short-lived link instead; the API key is never sent to the storage host.
+
 ## Resources
 
 - [Polymarket smart-money leaderboard](https://pmwallets.com) — profitable Polymarket traders scored from the Polygon chain, with win-rate confidence intervals

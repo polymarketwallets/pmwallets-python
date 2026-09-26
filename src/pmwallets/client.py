@@ -63,6 +63,15 @@ class _Base:
             raise PmwError(res.status_code, body)
         return body if text else None
 
+    @classmethod
+    def _location(cls, res: httpx.Response) -> str:
+        """The redirect target of a purchased-file request; anything else is raised as PmwError."""
+        loc = res.headers.get("location")
+        if 300 <= res.status_code < 400 and loc:
+            return loc
+        cls._parse(res)
+        raise PmwError(res.status_code, res.text, "expected a redirect to the file")
+
     @staticmethod
     def _fills_query(since_block: int, since_log_index: int, limit: int) -> dict[str, Any]:
         return {"sinceBlock": since_block, "sinceLogIndex": since_log_index, "limit": limit}
@@ -154,9 +163,22 @@ class Client(_Base):
     def get_export(self, export_id: str) -> dict[str, Any]:
         return self.request("GET", f"/v1/account/exports/{_q(export_id)}")
 
-    def export_download(self, export_id: str) -> dict[str, Any]:
-        """A presigned download URL, valid 15 minutes."""
-        return self.request("GET", f"/v1/account/exports/{_q(export_id)}/download")
+    def export_files(self, export_id: str) -> dict[str, Any]:
+        """The daily files an export grants: one per wallet per UTC day."""
+        return self.request("GET", f"/v1/account/exports/{_q(export_id)}/files")
+
+    def export_file_url(self, wallet: str, day: str) -> str:
+        """A short-lived (5 minute) link to one purchased daily file. The redirect is read, not followed,
+        so the API key is never sent to the storage host."""
+        res = self._http.request("GET", self.base_url + f"/v1/account/data/{_q(wallet)}/{_q(day)}", headers=self._headers, follow_redirects=False)
+        return self._location(res)
+
+    def download_export_file(self, wallet: str, day: str) -> bytes:
+        """One purchased daily file: zstd-compressed CSV bytes (.csv.zst)."""
+        res = self._http.get(self.export_file_url(wallet, day), timeout=max(self.timeout, 60.0))
+        if res.status_code != 200:
+            raise PmwError(res.status_code, res.text)
+        return res.content
 
 
 class AsyncClient(_Base):
@@ -233,5 +255,15 @@ class AsyncClient(_Base):
     async def get_export(self, export_id: str) -> dict[str, Any]:
         return await self.request("GET", f"/v1/account/exports/{_q(export_id)}")
 
-    async def export_download(self, export_id: str) -> dict[str, Any]:
-        return await self.request("GET", f"/v1/account/exports/{_q(export_id)}/download")
+    async def export_files(self, export_id: str) -> dict[str, Any]:
+        return await self.request("GET", f"/v1/account/exports/{_q(export_id)}/files")
+
+    async def export_file_url(self, wallet: str, day: str) -> str:
+        res = await self._http.request("GET", self.base_url + f"/v1/account/data/{_q(wallet)}/{_q(day)}", headers=self._headers, follow_redirects=False)
+        return self._location(res)
+
+    async def download_export_file(self, wallet: str, day: str) -> bytes:
+        res = await self._http.get(await self.export_file_url(wallet, day), timeout=max(self.timeout, 60.0))
+        if res.status_code != 200:
+            raise PmwError(res.status_code, res.text)
+        return res.content

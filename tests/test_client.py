@@ -56,3 +56,38 @@ def test_verify_webhook():
     assert not verify_webhook(body, sig, "other")
     assert not verify_webhook(body, "zz", "sec")
     assert not verify_webhook(body, None, "sec")
+
+
+W = "0x" + "ab" * 20
+
+
+def _file_transport(calls):
+    def handler(req: httpx.Request):
+        calls.append(req)
+        if req.url.host == "api.example.com":
+            return httpx.Response(302, headers={"location": "https://r2.example/signed"})
+        return httpx.Response(200, content=b"\x01\x02\x03")
+    return httpx.MockTransport(handler)
+
+
+def test_download_reads_the_redirect_and_never_sends_the_key_to_storage():
+    calls = []
+    c = Client("pmw_a_b", "https://api.example.com", http=httpx.Client(transport=_file_transport(calls)))
+    assert c.download_export_file(W, "2026-09-25") == b"\x01\x02\x03"
+    assert str(calls[0].url) == f"https://api.example.com/v1/account/data/{W}/2026-09-25"
+    assert str(calls[1].url) == "https://r2.example/signed"
+    assert "x-api-key" not in calls[1].headers
+
+
+async def test_async_download_reads_the_redirect():
+    calls = []
+    c = AsyncClient("pmw_a_b", "https://api.example.com", http=httpx.AsyncClient(transport=_file_transport(calls)))
+    assert await c.download_export_file(W, "2026-09-25") == b"\x01\x02\x03"
+    assert "x-api-key" not in calls[1].headers
+
+
+def test_no_purchased_file_is_pmw_error():
+    c = Client("k", http=httpx.Client(transport=transport([{"statusCode": 404, "message": "no purchased file for this wallet and day"}], 404)))
+    with pytest.raises(PmwError) as e:
+        c.export_file_url(W, "2026-09-25")
+    assert e.value.status == 404
