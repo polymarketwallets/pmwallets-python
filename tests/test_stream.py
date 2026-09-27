@@ -2,6 +2,9 @@ import asyncio
 import contextlib
 import json
 
+import pytest
+from urllib.parse import parse_qs, urlsplit
+
 from pmwallets.stream import FileStateStore, FillStream, MemoryStateStore, UpgradeRefused
 
 
@@ -68,13 +71,14 @@ class FakeClient:
                 yield f
 
 
-def harness(ledger, fail_on=None, refuse=None, head=209):
-    sockets, delivered, events = [], [], []
+def harness(ledger, fail_on=None, refuse=None, head=209, takeover=False, min_backoff=0.001):
+    sockets, delivered, events, urls = [], [], [], []
     client = FakeClient(ledger, head)
     state = {"fail": fail_on}
 
     @contextlib.asynccontextmanager
     async def connector(url, headers):
+        urls.append(parse_qs(urlsplit(url).query))
         if refuse:
             raise UpgradeRefused(refuse)
         s = FakeSocket()
@@ -90,8 +94,9 @@ def harness(ledger, fail_on=None, refuse=None, head=209):
             raise RuntimeError("handler failed")
         delivered.append((f["eventId"], meta.source))
 
-    stream = FillStream(client, on_fill, on_event=events.append, store=MemoryStateStore(), min_backoff=0.001,
-                        max_backoff=0.002, connector=connector)
+    stream = FillStream(client, on_fill, on_event=events.append, store=MemoryStateStore(), min_backoff=min_backoff,
+                        max_backoff=max(min_backoff, 0.002), connector=connector, takeover=takeover)
+    stream.urls = urls
     return stream, sockets, client, delivered, events
 
 
@@ -171,13 +176,66 @@ async def test_401_is_fatal():
     assert [e["type"] for e in events].count("connecting") == 1
 
 
-async def test_reports_takeover():
+async def test_replaced_by_takeover_stops_for_good():
     stream, sockets, _, _, events = harness([])
     await stream.start(); await tick()
     sockets[0].remote_close(1000, "replaced by a newer connection")
+    await asyncio.wait_for(stream.wait(), 1)
+    types = [e["type"] for e in events]
+    assert "replaced" in types and "fatal" in types
+    assert len(sockets) == 1  # reconnecting would take the stream back and the two would fight
+
+
+async def test_refused_4411_stops_and_says_how_to_take_over():
+    stream, sockets, _, _, events = harness([])
+    await stream.start(); await tick()
+    sockets[0].send({"type": "blocked", "reason": "api_seat_taken"})
+    sockets[0].remote_close(4411, "another API client is connected")
+    await asyncio.wait_for(stream.wait(), 1)
+    assert any(e["type"] == "blocked" for e in events)
+    fatal = [e for e in events if e["type"] == "fatal"]
+    assert fatal and "takeover" in str(fatal[0]["error"])
+    assert len(sockets) == 1
+
+
+async def test_server_restart_1012_reconnects_at_once():
+    stream, sockets, _, _, events = harness([], min_backoff=60)  # a backoff the test would time out waiting for
+    await stream.start(); await tick()
+    sockets[0].send({"type": "hello", "session": "A", "seq": 0})
     await tick()
-    assert any(e["type"] == "replaced" for e in events)
+    sockets[0].remote_close(1012, "service restart; reconnect now")
+    await tick(); await tick()
+    assert any(e["type"] == "restarting" for e in events)
+    assert len(sockets) == 2
     await stream.stop()
+
+
+async def test_client_id_on_every_connection_takeover_only_until_seated():
+    stream, sockets, _, _, _ = harness([], takeover=True)
+    await stream.start(); await tick()
+    sockets[0].send({"type": "hello", "session": "A", "seq": 0})
+    await tick()
+    sockets[0].remote_close(1006, "")
+    await tick(); await tick()
+    assert len(stream.urls) == 2
+    cid = stream.urls[0]["clientId"][0]
+    assert 8 <= len(cid) <= 64
+    assert stream.urls[1]["clientId"] == [cid]  # the same id, so the server knows it is us coming back
+    assert stream.urls[0]["takeover"] == ["1"]
+    assert "takeover" not in stream.urls[1]  # a reconnect must not snatch the stream from a client that took it meanwhile
+    await stream.stop()
+
+
+async def test_never_asks_to_take_over_unless_told():
+    stream, sockets, _, _, _ = harness([])
+    await stream.start(); await tick()
+    assert "takeover" not in stream.urls[0]
+    await stream.stop()
+
+
+def test_malformed_client_id_is_refused():
+    with pytest.raises(ValueError, match="client_id"):
+        FillStream(FakeClient([]), lambda f, m: None, client_id="short")
 
 
 async def test_anchors_behind_the_chain_head_on_first_hello():

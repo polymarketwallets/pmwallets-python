@@ -5,13 +5,21 @@ import contextlib
 import json
 import math
 import os
+import re
+import secrets
 from collections import OrderedDict
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, AsyncContextManager, Awaitable, Callable, Optional, Protocol, Union
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from .client import AsyncClient
 from .types import Fill
+
+# close codes the server uses (see the WebSocket section of the API docs)
+CLOSE_SERVICE_RESTART = 1012  # the server is restarting: reconnect at once
+CLOSE_API_SEAT_TAKEN = 4411  # another API client of this account holds the stream
+_CLIENT_ID = re.compile(r"[A-Za-z0-9_-]{8,64}")
 
 
 @dataclass
@@ -135,6 +143,8 @@ class FillStream:
         ws_options: Optional[dict[str, Any]] = None,
         replay_without_cursor: bool = False,
         anchor_lag_blocks: int = 200,
+        takeover: bool = False,
+        client_id: Optional[str] = None,
     ) -> None:
         self.client = client
         self.on_fill = on_fill
@@ -152,6 +162,16 @@ class FillStream:
         # your account; anchoring exactly at it could exclude a fill mined earlier but not yet pushed. The extra
         # blocks are replayed at most once more and dropped by eventId.
         self.anchor_lag_blocks = anchor_lag_blocks
+        # One stream per account, and the API client that connected FIRST keeps it: a second one is refused
+        # ("blocked", then "fatal"). takeover=True replaces whichever client holds it — that client is told
+        # "replaced" and stops. Only the first connection asks; our own reconnects are recognised by client_id.
+        self.takeover = takeover
+        self._ask_takeover = takeover
+        # Identifies this stream so its own reconnects replace its own dead connection instead of being refused
+        # by it. Default: random per FillStream.
+        self.client_id = client_id if client_id is not None else secrets.token_urlsafe(16)
+        if not _CLIENT_ID.fullmatch(self.client_id):
+            raise ValueError("client_id must be 8-64 characters of [A-Za-z0-9_-]")
         self.connector = connector or websockets_connector(ping_interval, **(ws_options or {}))
         self.state = StreamState()
         self._seen: "OrderedDict[str, bool]" = OrderedDict()
@@ -203,17 +223,29 @@ class FillStream:
     async def _loop(self) -> None:
         backoff = self.min_backoff
         while self._running:
-            healthy = await self._connect_once()
+            healthy, code = await self._connect_once()
             if not self._running:
                 break
+            if code == CLOSE_SERVICE_RESTART:  # the server's replacement is taking over now: reconnect at once
+                backoff = self.min_backoff
+                continue
             backoff = self.min_backoff if healthy else min(backoff * 2, self.max_backoff)
             self._wake.clear()
             with contextlib.suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(self._wake.wait(), backoff)
 
-    async def _connect_once(self) -> bool:
-        """One connection's life; True when it got as far as a hello and did not fail."""
-        url = self.client.ws_url
+    def _url(self) -> str:
+        """The stream URL with this client's identity (and, before the first hello, the takeover request)."""
+        u = urlsplit(self.client.ws_url)
+        q = [(k, v) for k, v in parse_qsl(u.query) if k not in ("clientId", "takeover")]
+        q.append(("clientId", self.client_id))
+        if self._ask_takeover:
+            q.append(("takeover", "1"))
+        return urlunsplit(u._replace(query=urlencode(q)))
+
+    async def _connect_once(self) -> tuple[bool, int]:
+        """One connection's life: (got as far as a hello and did not fail, the close code)."""
+        url = self._url()
         self._emit({"type": "connecting", "url": url})
         greeted = False
         failed = False
@@ -248,16 +280,25 @@ class FillStream:
                 self._emit({"type": "fatal", "error": RuntimeError(f"WebSocket upgrade refused with {e.status_code}: check the API key")})
             else:
                 self._emit({"type": "error", "error": e})
-            return False
+            return False, 0
         except Exception as e:
             self._emit({"type": "error", "error": e})
-            return False
+            return False, 0
         finally:
             self._socket = None
-        if code == 1000 and "replaced" in reason.lower():
-            self._emit({"type": "replaced"})
         self._emit({"type": "disconnected", "code": code, "reason": reason})
-        return greeted and not failed
+        if code == 1000 and "replaced" in reason.lower() and self._running:
+            # another client took over: reconnecting would take the stream back and the two would fight
+            self._running = False
+            self._emit({"type": "replaced"})
+            self._emit({"type": "fatal", "error": RuntimeError("another API client of this account took the stream over (takeover); this stream has stopped")})
+        elif code == CLOSE_API_SEAT_TAKEN and self._running:
+            self._running = False
+            self._emit({"type": "blocked"})
+            self._emit({"type": "fatal", "error": RuntimeError("another API client of this account already holds the stream (one per account; the first one keeps it). Stop it, or pass takeover=True to replace it")})
+        elif code == CLOSE_SERVICE_RESTART:
+            self._emit({"type": "restarting"})
+        return greeted and not failed, code
 
     async def _handle_frame(self, m: dict[str, Any]) -> None:
         if m.get("type") == "hello" and isinstance(m.get("session"), str):
@@ -270,6 +311,7 @@ class FillStream:
             self.state.session = m["session"]
             self.state.seq = int(m.get("seq") or 0)
             await self.store.save(self.state)
+            self._ask_takeover = False  # seated: from here on our own client_id is what gets us back in
             self._emit({"type": "hello", "session": m["session"], "seq": self.state.seq})
             return
         if m.get("type") != "fill" or not m.get("data") or not isinstance(m.get("seq"), int):

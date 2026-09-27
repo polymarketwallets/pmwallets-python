@@ -35,6 +35,8 @@ async def main():
             client=pmw,
             store=FileStateStore("stream.json"),     # a restart resumes exactly where it stopped
             on_fill=lambda fill, meta: print(meta.source, fill["side"], fill["price"], fill["tokenId"]),
+            on_event=lambda e: e["type"] == "fatal" and print(e["error"]),   # e.g. another bot already holds the stream
+            # takeover=True,   # replace whichever API client holds this account's stream (it stops with "replaced")
         )
         await stream.run()
 
@@ -49,7 +51,14 @@ asyncio.run(main())
 | `FillStream` | asyncio WebSocket with reconnect and keep-alive; detects missed frames by `session`/`seq` and replays them from the last fill delivered; de-duplicates by `eventId`; anchors behind the chain head on first start; persisted cursor |
 | `verify_webhook(raw_body, signature, secret)` | checks `x-pmw-signature` (HMAC-SHA256 of the raw body) |
 
-One stream per account. An API-key connection takes priority over the pmwallets.com feed page (the page never takes the stream from it); between two API connections the newest wins, so run one consumer per account. `HTTPS_PROXY` is honoured.
+One stream per account:
+
+- An API-key connection takes priority over the pmwallets.com feed page (the page never takes the stream from it).
+- Between two API connections **the first one keeps the stream**. A second one — another key of the same account, or the same bot started twice — is refused: `blocked`, then `fatal`, and the stream stops. Pass `takeover=True` to replace the holder instead; the holder gets `replaced`, then `fatal`, and stops (it does not fight back).
+- A `FillStream` identifies itself with a random `client_id`, so its own reconnects after a network drop replace its own dead connection without needing `takeover`.
+- When the server restarts it closes the socket with `1012`; the stream reconnects at once (event `restarting`) and replays anything it missed.
+
+`HTTPS_PROXY` is honoured.
 
 PMWallets' servers are in the United Kingdom. A consumer that also trades on Polymarket should run from Ireland (AWS eu-west-1): Polymarket does not accept API orders from the UK, the US and several EU countries.
 
