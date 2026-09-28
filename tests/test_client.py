@@ -52,6 +52,39 @@ async def test_async_my_addresses():
     assert str(calls[0].url) == "https://api.example.com/v1/leaderboard?mine=1"
 
 
+CASES = [
+    (lambda c: c.periods(), "GET", "/v1/periods", None),
+    (lambda c: c.plan(), "GET", "/v1/account/plan", None),
+    (lambda c: c.plans(), "GET", "/v1/plans", None),
+    (lambda c: c.billing(), "GET", "/v1/account/billing", None),
+    (lambda c: c.ledger(limit=10, cursor="x|1"), "GET", "/v1/account/ledger?limit=10&cursor=x%7C1", None),
+    (lambda c: c.unlock_with_plan("H1"), "POST", "/v1/account/reveals", {"entityId": "H1", "maxPriceCents": 0, "viaPlan": True}),
+    (lambda c: c.create_plan_export(["H1"]), "POST", "/v1/account/exports", {"entityIds": ["H1"], "viaPlan": True}),
+    (lambda c: c.export_window(), "GET", "/v1/account/exports/window", None),
+    (lambda c: c.export_rate_card(), "GET", "/v1/exports/rate-card", None),
+    (lambda c: c.webhooks(), "GET", "/v1/account/webhooks", None),
+    (lambda c: c.reactivate_webhook("w 1"), "POST", "/v1/account/webhooks/w%201/reactivate", None),
+    (lambda c: c.deliveries(limit=5), "GET", "/v1/account/deliveries?limit=5", None),
+    (lambda c: c.delivery_stats(hours=24), "GET", "/v1/account/delivery-stats?hours=24", None),
+]
+
+
+@pytest.mark.parametrize("call,method,path,body", CASES)
+def test_account_calls_map_to_endpoints(call, method, path, body):
+    calls = []
+    call(Client("k", "https://api.example.com", http=httpx.Client(transport=transport([{}], calls=calls))))
+    assert f"{calls[0].method} {calls[0].url}" == f"{method} https://api.example.com{path}"
+    if body is not None:
+        assert json.loads(calls[0].content) == body
+
+
+@pytest.mark.parametrize("call,method,path,body", CASES)
+async def test_async_account_calls_map_to_endpoints(call, method, path, body):
+    calls = []
+    await call(AsyncClient("k", "https://api.example.com", http=httpx.AsyncClient(transport=transport([{}], calls=calls))))
+    assert f"{calls[0].method} {calls[0].url}" == f"{method} https://api.example.com{path}"
+
+
 def test_non_2xx_is_pmw_error():
     calls = []
     c = Client("k", http=httpx.Client(transport=transport([{"statusCode": 402, "message": "insufficient balance"}], 402, calls)))

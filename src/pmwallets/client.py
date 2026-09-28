@@ -116,10 +116,52 @@ class Client(_Base):
     def latency(self) -> dict[str, Any]:
         return self.request("GET", "/v1/latency")
 
+    def periods(self) -> list[dict[str, Any]]:
+        """The published statistics windows (e.g. 30d, 7d) and when each was computed."""
+        return self.request("GET", "/v1/periods")
+
+    # ── account
+    def plan(self) -> dict[str, Any]:
+        """Your monthly plan (Base / Pro / Max), its period dates and what is used of its allowances."""
+        return self.request("GET", "/v1/account/plan")
+
+    def plans(self) -> dict[str, Any]:
+        """The plans on sale: price and allowances of Base / Pro / Max."""
+        return self.request("GET", "/v1/plans")
+
+    def billing(self) -> dict[str, Any]:
+        """Balance and top-up options."""
+        return self.request("GET", "/v1/account/billing")
+
+    def ledger(self, limit: Optional[int] = None, cursor: Optional[str] = None) -> dict[str, Any]:
+        """One page of the balance statement, newest first; pass the previous page's `next` as `cursor`."""
+        return self.request("GET", "/v1/account/ledger", {"limit": limit, "cursor": cursor})
+
+    # ── webhooks
+    def webhooks(self) -> list[dict[str, Any]]:
+        """Your webhook endpoint. With an API key the URL comes back as its origin only; adding or removing one needs the website."""
+        return self.request("GET", "/v1/account/webhooks")
+
+    def reactivate_webhook(self, webhook_id: str) -> dict[str, Any]:
+        """Re-enable an endpoint that was disabled after a day of failures, and resume the subscriptions it paused."""
+        return self.request("POST", f"/v1/account/webhooks/{_q(webhook_id)}/reactivate")
+
+    def deliveries(self, limit: Optional[int] = None, cursor: Optional[str] = None) -> dict[str, Any]:
+        """One page of delivery attempts (webhook and WebSocket), newest first."""
+        return self.request("GET", "/v1/account/deliveries", {"limit": limit, "cursor": cursor})
+
+    def delivery_stats(self, hours: Optional[int] = None) -> dict[str, Any]:
+        """Delivery success and latency over the last `hours`."""
+        return self.request("GET", "/v1/account/delivery-stats", {"hours": hours})
+
     # ── addresses
     def buy_reveal(self, entity_id: str, max_price_cents: int) -> dict[str, Any]:
         """Buy the address behind a handle. `max_price_cents` is a ceiling: the charge never exceeds it."""
         return self.request("POST", "/v1/account/reveals", body={"entityId": entity_id, "maxPriceCents": max_price_cents})
+
+    def unlock_with_plan(self, entity_id: str) -> dict[str, Any]:
+        """Unlock with your plan's allowance instead of the balance: never charges (409 when the allowance is used up)."""
+        return self.request("POST", "/v1/account/reveals", body={"entityId": entity_id, "maxPriceCents": 0, "viaPlan": True})
 
     def reveals(self) -> list[dict[str, Any]]:
         return self.request("GET", "/v1/account/reveals")
@@ -163,6 +205,18 @@ class Client(_Base):
     def create_export(self, entity_ids: list[str], from_: str, to: str) -> dict[str, Any]:
         """Charges the balance; the price is recomputed server-side."""
         return self.request("POST", "/v1/account/exports", body={"entityIds": entity_ids, "from": from_, "to": to})
+
+    def create_plan_export(self, entity_ids: list[str]) -> dict[str, Any]:
+        """From a Max plan's monthly allowance: the whole sellable window, nothing charged."""
+        return self.request("POST", "/v1/account/exports", body={"entityIds": entity_ids, "viaPlan": True})
+
+    def export_window(self) -> dict[str, Any]:
+        """The days that can be bought right now (a contiguous range ending at the latest published day)."""
+        return self.request("GET", "/v1/account/exports/window")
+
+    def export_rate_card(self) -> dict[str, Any]:
+        """The per-day prices exports are charged at."""
+        return self.request("GET", "/v1/exports/rate-card")
 
     def exports(self) -> list[dict[str, Any]]:
         return self.request("GET", "/v1/account/exports")
@@ -222,8 +276,50 @@ class AsyncClient(_Base):
     async def latency(self) -> dict[str, Any]:
         return await self.request("GET", "/v1/latency")
 
+    async def periods(self) -> list[dict[str, Any]]:
+        """The published statistics windows (e.g. 30d, 7d) and when each was computed."""
+        return await self.request("GET", "/v1/periods")
+
+    # ── account
+    async def plan(self) -> dict[str, Any]:
+        """Your monthly plan (Base / Pro / Max), its period dates and what is used of its allowances."""
+        return await self.request("GET", "/v1/account/plan")
+
+    async def plans(self) -> dict[str, Any]:
+        """The plans on sale: price and allowances of Base / Pro / Max."""
+        return await self.request("GET", "/v1/plans")
+
+    async def billing(self) -> dict[str, Any]:
+        """Balance and top-up options."""
+        return await self.request("GET", "/v1/account/billing")
+
+    async def ledger(self, limit: Optional[int] = None, cursor: Optional[str] = None) -> dict[str, Any]:
+        """One page of the balance statement, newest first; pass the previous page's `next` as `cursor`."""
+        return await self.request("GET", "/v1/account/ledger", {"limit": limit, "cursor": cursor})
+
+    # ── webhooks
+    async def webhooks(self) -> list[dict[str, Any]]:
+        """Your webhook endpoint. With an API key the URL comes back as its origin only; adding or removing one needs the website."""
+        return await self.request("GET", "/v1/account/webhooks")
+
+    async def reactivate_webhook(self, webhook_id: str) -> dict[str, Any]:
+        """Re-enable an endpoint that was disabled after a day of failures, and resume the subscriptions it paused."""
+        return await self.request("POST", f"/v1/account/webhooks/{_q(webhook_id)}/reactivate")
+
+    async def deliveries(self, limit: Optional[int] = None, cursor: Optional[str] = None) -> dict[str, Any]:
+        """One page of delivery attempts (webhook and WebSocket), newest first."""
+        return await self.request("GET", "/v1/account/deliveries", {"limit": limit, "cursor": cursor})
+
+    async def delivery_stats(self, hours: Optional[int] = None) -> dict[str, Any]:
+        """Delivery success and latency over the last `hours`."""
+        return await self.request("GET", "/v1/account/delivery-stats", {"hours": hours})
+
     async def buy_reveal(self, entity_id: str, max_price_cents: int) -> dict[str, Any]:
         return await self.request("POST", "/v1/account/reveals", body={"entityId": entity_id, "maxPriceCents": max_price_cents})
+
+    async def unlock_with_plan(self, entity_id: str) -> dict[str, Any]:
+        """Unlock with your plan's allowance instead of the balance: never charges (409 when the allowance is used up)."""
+        return await self.request("POST", "/v1/account/reveals", body={"entityId": entity_id, "maxPriceCents": 0, "viaPlan": True})
 
     async def reveals(self) -> list[dict[str, Any]]:
         return await self.request("GET", "/v1/account/reveals")
@@ -259,6 +355,18 @@ class AsyncClient(_Base):
 
     async def create_export(self, entity_ids: list[str], from_: str, to: str) -> dict[str, Any]:
         return await self.request("POST", "/v1/account/exports", body={"entityIds": entity_ids, "from": from_, "to": to})
+
+    async def create_plan_export(self, entity_ids: list[str]) -> dict[str, Any]:
+        """From a Max plan's monthly allowance: the whole sellable window, nothing charged."""
+        return await self.request("POST", "/v1/account/exports", body={"entityIds": entity_ids, "viaPlan": True})
+
+    async def export_window(self) -> dict[str, Any]:
+        """The days that can be bought right now (a contiguous range ending at the latest published day)."""
+        return await self.request("GET", "/v1/account/exports/window")
+
+    async def export_rate_card(self) -> dict[str, Any]:
+        """The per-day prices exports are charged at."""
+        return await self.request("GET", "/v1/exports/rate-card")
 
     async def exports(self) -> list[dict[str, Any]]:
         return await self.request("GET", "/v1/account/exports")

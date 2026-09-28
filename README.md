@@ -47,7 +47,7 @@ asyncio.run(main())
 
 | | |
 |---|---|
-| `Client` / `AsyncClient` | leaderboard, entities, address unlocks, your unlocked addresses (`my_addresses`), subscriptions, fills replay (`fills`, `fills_since`), trade-history exports |
+| `Client` / `AsyncClient` | leaderboard, entities, address unlocks (balance or plan), your unlocked addresses (`my_addresses`), plan and balance, subscriptions, webhook status and deliveries, fills replay (`fills`, `fills_since`), trade-history exports |
 | `FillStream` | asyncio WebSocket with reconnect and keep-alive; detects missed frames by `session`/`seq` and replays them from the last fill delivered; de-duplicates by `eventId`; anchors behind the chain head on first start; persisted cursor |
 | `verify_webhook(raw_body, signature, secret)` | checks `x-pmw-signature` (HMAC-SHA256 of the raw body) |
 
