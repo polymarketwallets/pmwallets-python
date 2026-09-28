@@ -102,6 +102,13 @@ class Client(_Base):
     def leaderboard(self, **query: Any) -> Leaderboard:
         return self.request("GET", "/v1/leaderboard", query)
 
+    def my_addresses(self, **query: Any) -> Leaderboard:
+        """Every address you have unlocked (bought, free, or with your plan) as board rows. Each row has
+        `unlockedBy` ('paid' / 'free' / 'plan', or None when a free or plan unlock lapsed and is masked again)
+        and `pausedReason` when your push subscription to it is paused; `outside` (first page only) lists
+        unlocked addresses with no fill in the window. Spends no board rows."""
+        return self.request("GET", "/v1/leaderboard", {**query, "mine": 1})
+
     def entity(self, entity_id: str, period: Optional[str] = None) -> dict[str, Any]:
         """One entity by handle or address. The full address comes back only for entities you own."""
         return self.request("GET", f"/v1/entities/{_q(entity_id)}", {"period": period})
@@ -204,6 +211,10 @@ class AsyncClient(_Base):
 
     async def leaderboard(self, **query: Any) -> Leaderboard:
         return await self.request("GET", "/v1/leaderboard", query)
+
+    async def my_addresses(self, **query: Any) -> Leaderboard:
+        """See Client.my_addresses."""
+        return await self.request("GET", "/v1/leaderboard", {**query, "mine": 1})
 
     async def entity(self, entity_id: str, period: Optional[str] = None) -> dict[str, Any]:
         return await self.request("GET", f"/v1/entities/{_q(entity_id)}", {"period": period})

@@ -38,6 +38,20 @@ async def test_walks_every_page():
     assert "sinceBlock=2&sinceLogIndex=0&limit=2" in str(calls[1].url)
 
 
+def test_my_addresses_asks_the_board_for_mine():
+    calls = []
+    c = Client("k", "https://api.example.com", http=httpx.Client(transport=transport([{"periodId": "30d", "tracked": 2, "rows": []}], calls=calls)))
+    assert c.my_addresses(sort="realizedPnl", offset=15)["tracked"] == 2
+    assert str(calls[0].url) == "https://api.example.com/v1/leaderboard?sort=realizedPnl&offset=15&mine=1"
+
+
+async def test_async_my_addresses():
+    calls = []
+    c = AsyncClient("k", "https://api.example.com", http=httpx.AsyncClient(transport=transport([{"tracked": 0, "rows": []}], calls=calls)))
+    await c.my_addresses()
+    assert str(calls[0].url) == "https://api.example.com/v1/leaderboard?mine=1"
+
+
 def test_non_2xx_is_pmw_error():
     calls = []
     c = Client("k", http=httpx.Client(transport=transport([{"statusCode": 402, "message": "insufficient balance"}], 402, calls)))

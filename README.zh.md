@@ -20,7 +20,7 @@ pip install pmwallets     # Python ≥ 3.10
 
 | | |
 |---|---|
-| `Client` / `AsyncClient` | 排行榜、实体、地址解锁、订阅、成交补发（`fills`、`fills_since`）、交易历史导出 |
+| `Client` / `AsyncClient` | 排行榜、实体、地址解锁、我的地址(`my_addresses`)、订阅、成交补发（`fills`、`fills_since`）、交易历史导出 |
 | `FillStream` | asyncio WebSocket，自动重连与保活；按 `session`/`seq` 发现漏帧并从最后送达的成交补发；按 `eventId` 去重；首次启动锚定在链头之后；游标持久化 |
 | `verify_webhook(raw_body, signature, secret)` | 校验 `x-pmw-signature`（原始 body 的 HMAC-SHA256） |
 
