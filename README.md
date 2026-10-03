@@ -85,6 +85,20 @@ for f in client.export_files(order["id"])["files"]:
 - [Ways to follow Polymarket wallets, compared](https://pmwallets.com/compare) — official leaderboard, free trackers, SQL dashboards
 - [FAQ](https://pmwallets.com/faq) · [中文站](https://pmwallets.com/zh)
 
+**Guides**
+
+- [PMWallets SDKs](https://pmwallets.com/sdk) — Node.js and Python clients, side by side
+- [Polymarket data in Python](https://pmwallets.com/guides/polymarket-api-python) — markets, a wallet's trades, and live fills
+- [How to get a Polymarket wallet's trades in real time](https://pmwallets.com/guides/polymarket-real-time-trades-api) — polling the Data API, reading OrderFilled events on Polygon, or a pushed fill stream with replay
+- [Polymarket WebSocket API](https://pmwallets.com/guides/polymarket-websocket-api) — what the market and user channels give you, and what they don't
+- [Polymarket trade alerts by webhook](https://pmwallets.com/guides/polymarket-trade-alerts-webhook) — verify the HMAC-SHA256 signature, answer fast, deduplicate on eventId
+- [How to export a Polymarket wallet's full trade history](https://pmwallets.com/guides/polymarket-trade-history-export) — past the Data API's 10,000-trade cap: every fill from the chain, one CSV per wallet per day
+- [Polymarket token IDs, condition IDs and slugs](https://pmwallets.com/guides/polymarket-token-ids) — how they connect
+- [How to calculate a Polymarket wallet's PnL](https://pmwallets.com/guides/polymarket-pnl-explained) — and why sites disagree
+- [Polymarket leaderboards by category](https://pmwallets.com/leaderboard) — sports, crypto, politics, esports and more, ranked from on-chain PnL
+- [Busiest Polymarket markets](https://pmwallets.com/markets) — the 1,000 most-traded markets of the last 30 days and how their traders did
+- [All guides](https://pmwallets.com/guides) · [llms.txt](https://pmwallets.com/llms.txt)
+
 ## License
 
 MIT
