@@ -26,6 +26,7 @@ from pmwallets import AsyncClient, Client, FillStream, FileStateStore
 # synchronous REST
 with Client(api_key="pmw_...") as pmw:
     board = pmw.leaderboard(minWinLo=0.55, minEligible=30, style="taker", status="active", limit=50)
+    cheap = pmw.leaderboard(bands=[0, 1], minWinLo=0.55)   # address unlocks free or in the $1 band (0 = free ... 5)
     pmw.subscribe(board["rows"][0]["entityId"], channels=["ws"])   # billed per entity per hour
 
 # every fill of every entity you follow

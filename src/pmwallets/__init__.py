@@ -10,4 +10,4 @@ __all__ = [
     "CLOSE_API_SEAT_TAKEN", "CLOSE_SERVICE_RESTART", "FileStateStore", "FillMeta", "FillStream", "MemoryStateStore", "StreamState", "UpgradeRefused", "websockets_connector",
     "Fill", "FillCursor", "FillsPage", "verify_webhook",
 ]
-__version__ = "0.2.0"
+__version__ = "0.5.1"

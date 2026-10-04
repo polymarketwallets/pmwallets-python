@@ -47,7 +47,12 @@ class _Base:
         for k, v in (query or {}).items():
             if v is None:
                 continue
-            out[k] = ("true" if v else "false") if isinstance(v, bool) else v
+            if isinstance(v, bool):
+                out[k] = "true" if v else "false"
+            elif isinstance(v, (list, tuple)):
+                out[k] = ",".join(str(x) for x in v)   # one comma-separated value, e.g. bands=0,2
+            else:
+                out[k] = v
         return out
 
     @staticmethod
@@ -100,6 +105,8 @@ class Client(_Base):
 
     # ── the board
     def leaderboard(self, **query: Any) -> Leaderboard:
+        """The board, filtered by any of the API's figures (minPnl, minWinLo, style, category, ...). `bands=[0, 1]`
+        keeps wallets whose address unlocks in those price bands (0 = free ... 5; the ladder is `pricing.bands`)."""
         return self.request("GET", "/v1/leaderboard", query)
 
     def my_addresses(self, **query: Any) -> Leaderboard:

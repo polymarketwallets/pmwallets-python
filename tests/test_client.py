@@ -38,6 +38,15 @@ async def test_walks_every_page():
     assert "sinceBlock=2&sinceLogIndex=0&limit=2" in str(calls[1].url)
 
 
+def test_bands_go_out_as_one_comma_separated_value():
+    calls = []
+    c = Client("k", "https://api.example.com", http=httpx.Client(transport=transport([{"rows": []}, {"rows": []}], calls=calls)))
+    c.leaderboard(bands=[0, 2], limit=5)
+    c.leaderboard(bands="1,3")
+    assert str(calls[0].url) == "https://api.example.com/v1/leaderboard?bands=0%2C2&limit=5"
+    assert str(calls[1].url) == "https://api.example.com/v1/leaderboard?bands=1%2C3"
+
+
 def test_my_addresses_asks_the_board_for_mine():
     calls = []
     c = Client("k", "https://api.example.com", http=httpx.Client(transport=transport([{"periodId": "30d", "tracked": 2, "rows": []}], calls=calls)))
