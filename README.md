@@ -1,6 +1,6 @@
 # pmwallets — Python SDK for PMWallets
 
-[![PyPI](https://img.shields.io/pypi/v/pmwallets.svg)](https://pypi.org/project/pmwallets/) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/pmwallets.svg)](https://pypi.org/project/pmwallets/) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/Xy5uTTb3gN)
 
 Official Python client for [PMWallets](https://pmwallets.com): the **Polymarket smart-money leaderboard** computed
 from the Polygon chain, and the **real-time fills of the Polymarket wallets you follow** — delivered in order,
