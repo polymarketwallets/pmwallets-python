@@ -1,5 +1,7 @@
 # pmwallets — Python SDK for PMWallets
 
+<!-- mcp-name: io.github.polymarketwallets/pmwallets -->
+
 [![PyPI](https://img.shields.io/pypi/v/pmwallets.svg)](https://pypi.org/project/pmwallets/) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/Xy5uTTb3gN)
 
 Official Python client for [PMWallets](https://pmwallets.com): the **Polymarket smart-money leaderboard** computed
@@ -62,6 +64,33 @@ One stream per account:
 `HTTPS_PROXY` is honoured.
 
 PMWallets' servers are in the United Kingdom. A consumer that also trades on Polymarket should run from Ireland (AWS eu-west-1): Polymarket does not accept API orders from the UK, the US and several EU countries.
+
+## AI agents: command line and MCP
+
+The package installs a `pmwallets` command that prints JSON — for scripts, and for AI agents (Claude Code, Codex,
+Gemini CLI, Cursor, WorkBuddy, …) that act on the fills of the traders you follow.
+
+```bash
+export PMW_API_KEY=pmw_…
+pmwallets leaderboard --minWinLo 0.55 --category politics --limit 20
+pmwallets subscribe <handle>          # billed per hour
+pmwallets new-fills                   # fills since the previous call, each once (poll it)
+pmwallets watch                       # live: one JSON line per fill, with its market and decimal amounts
+pmwallets watch --batch-sec 30 --exec 'claude -p "Fills from traders I follow are on stdin. …"'
+pmwallets mcp                         # the same as MCP tools
+pmwallets skill                       # the guide to give your agent (SKILL.md)
+```
+
+- `watch --exec` runs the command once per batch, the fills on its stdin as JSON lines (and in `$PMW_BATCH_FILE`);
+  fills that arrive while it runs make the next batch. A batch is handed over **at most once**: one whose command
+  fails, times out or is interrupted is kept in `pmw-watch/failed/` and never re-run — the agent may already have
+  placed an order. Restarts resume from where the stream stopped.
+- To trade, give the agent [pmwallets-copytrade](https://github.com/polymarketwallets/polymarket-copy-trading-bot-python):
+  `order buy <tokenId> --usdc 5 --key <eventId>` (the same key never orders twice), `market`, `balance`, `positions`.
+- MCP config (Claude Desktop, Cursor, …): `{"command": "uvx", "args": ["pmwallets", "mcp"], "env": {"PMW_API_KEY": "pmw_…"}}`.
+- Platforms without a shell (Dify, Coze, n8n, GPT Actions): import [openapi.json](https://pmwallets.com/openapi.json).
+- `HTTPS_PROXY` / `NO_PROXY` are honoured by the command line.
+- The same pieces are importable: `Watcher`, `MarketLookup`, `serve_mcp` / `McpTool`, `pmwallets_tools`.
 
 ## Trade-history exports
 

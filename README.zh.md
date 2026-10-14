@@ -28,6 +28,31 @@ pip install pmwallets     # Python ≥ 3.10
 
 PMWallets 的服务器在英国。若还要在 Polymarket 下单，请部署在爱尔兰（AWS eu-west-1）：Polymarket 不接受来自英国、美国及部分欧盟国家的 API 订单。
 
+## AI agent：命令行与 MCP
+
+安装后带一个 `pmwallets` 命令，全部输出 JSON——给脚本用，也给 AI agent（Claude Code、Codex、Gemini CLI、Cursor、
+WorkBuddy……）用，让它对你关注的交易者的成交做出反应。
+
+```bash
+export PMW_API_KEY=pmw_…
+pmwallets leaderboard --minWinLo 0.55 --category politics --limit 20
+pmwallets subscribe <handle>          # 按小时计费
+pmwallets new-fills                   # 上次调用之后的新成交，每笔只给一次（定时拉取）
+pmwallets watch                       # 实时：每笔成交一行 JSON，带市场信息和十进制金额
+pmwallets watch --batch-sec 30 --exec 'claude -p "stdin 里是我关注的交易者的成交。……"'
+pmwallets mcp                         # 同样的能力，作为 MCP 工具
+pmwallets skill                       # 交给 agent 的使用说明（SKILL.md）
+```
+
+- `watch --exec` 每一批成交运行一次命令，成交以 JSON 行写进它的 stdin（同时在 `$PMW_BATCH_FILE` 文件里）；命令运行
+  期间到达的成交组成下一批。每批**最多交出一次**：命令失败、超时或被中断的批次保存在 `pmw-watch/failed/`，不会重跑
+  ——agent 可能已经下过单。重启后从上次停下的位置继续。
+- 要下单，给 agent 配上 [pmwallets-copytrade](https://github.com/polymarketwallets/polymarket-copy-trading-bot-python)：
+  `order buy <tokenId> --usdc 5 --key <eventId>`（同一个 key 永远不会下第二单）、`market`、`balance`、`positions`。
+- MCP 配置（Claude Desktop、Cursor 等）：`{"command": "uvx", "args": ["pmwallets", "mcp"], "env": {"PMW_API_KEY": "pmw_…"}}`。
+- 没有命令行的平台（Dify、Coze、n8n、GPT Actions）：导入 [openapi.json](https://pmwallets.com/openapi.json)。
+- 命令行会读取 `HTTPS_PROXY` / `NO_PROXY`。
+
 ## 历史成交导出
 
 购买得到的是文件的访问权:每个钱包每个 UTC 日一个 zstd 压缩的 CSV,付款后立即可下载,之后也能再下。
