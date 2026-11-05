@@ -263,3 +263,51 @@ async def test_file_state_store_roundtrip(tmp_path):
     await store.save(StreamState("s", 3, 9, 2))
     assert await store.load() == StreamState("s", 3, 9, 2)
     assert json.loads((tmp_path / "sub" / "state.json").read_text()) == {"session": "s", "seq": 3, "block": 9, "logIndex": 2}
+
+
+class _Sock:
+    def __init__(self, frames, code=None):
+        self.frames, self.close_code = frames, code
+
+    def __aiter__(self):
+        async def gen():
+            for f in self.frames:
+                yield f
+        return gen()
+
+
+def _connector(socks, urls):
+    @contextlib.asynccontextmanager
+    async def connect(url, headers):
+        urls.append(url)
+        s = socks.pop(0)
+        if isinstance(s, Exception):
+            raise s
+        yield s
+    return connect
+
+
+class _Key:
+    api_key = "pmw_a_b"
+    signals_ws_url = "wss://x/v1/signals/ws"
+
+
+async def test_signal_stream_delivers_alerts_and_stops_when_replaced():
+    from pmwallets import SignalStream
+    seen, urls, events = [], [], []
+    socks = [_Sock(['{"type":"hello"}', "not json", '{"type":"radar","data":{"usd":52000}}'], 1006), _Sock([], 4412)]
+    s = SignalStream(_Key(), seen.append, events.append, connector=_connector(socks, urls), max_backoff=0.01)
+    s.start()
+    await asyncio.wait_for(s.wait(), 5)
+    assert seen == [{"type": "radar", "data": {"usd": 52000}}]
+    assert len(urls) == 2 and events[-1]["type"] == "stopped"
+
+
+async def test_signal_stream_stops_on_a_plan_without_signals():
+    from pmwallets import SignalStream
+    from pmwallets.stream import UpgradeRefused
+    urls, events = [], []
+    s = SignalStream(_Key(), lambda a: None, events.append, connector=_connector([UpgradeRefused(403)], urls))
+    s.start()
+    await asyncio.wait_for(s.wait(), 5)
+    assert len(urls) == 1 and "Pro and Max" in events[-1]["reason"]

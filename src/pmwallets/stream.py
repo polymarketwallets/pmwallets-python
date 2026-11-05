@@ -364,3 +364,64 @@ class FillStream:
             self.state.block = fill["block"]
             self.state.logIndex = fill["logIndex"]
         return True
+
+
+# this socket was replaced by a newer one past the account's limit: reconnecting would evict another
+CLOSE_SIGNALS_REPLACED = 4412
+
+
+class SignalStream:
+    """The live alerts of your rules (Pro and Max): connects, reconnects with backoff, stops when told not to come back.
+    Best effort: GET /v1/signals and /v1/radar hold what a gap missed. `on_alert` gets {"type": "signal" | "radar", "data": ...}."""
+
+    def __init__(self, client: AsyncClient, on_alert: Callable[[dict[str, Any]], Any], on_event: Optional[OnEvent] = None,
+                 connector: Optional[Connector] = None, max_backoff: float = 15.0) -> None:
+        self._client, self._on_alert, self._on_event = client, on_alert, on_event or (lambda e: None)
+        self._connector = connector or websockets_connector()
+        self._max_backoff = max_backoff
+        self._task: Optional[asyncio.Task[None]] = None
+
+    def start(self) -> None:
+        self._task = asyncio.create_task(self._run())
+
+    async def stop(self) -> None:
+        if self._task:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+
+    async def wait(self) -> None:
+        if self._task:
+            await self._task
+
+    async def _run(self) -> None:
+        backoff = 1.0
+        while True:
+            code = None
+            try:
+                async with self._connector(self._client.signals_ws_url, {"x-api-key": self._client.api_key}) as ws:
+                    self._on_event({"type": "connected"})
+                    backoff = 1.0
+                    async for raw in ws:
+                        try:
+                            f = json.loads(raw)
+                        except ValueError:
+                            continue
+                        if isinstance(f, dict) and f.get("type") in ("signal", "radar") and f.get("data"):
+                            r = self._on_alert({"type": f["type"], "data": f["data"]})
+                            if asyncio.iscoroutine(r):
+                                await r
+                    code = getattr(ws, "close_code", None)
+            except UpgradeRefused as e:
+                if e.status_code in (401, 403):
+                    reason = "signals are part of the Pro and Max plans" if e.status_code == 403 else "the API key was refused"
+                    return self._on_event({"type": "stopped", "reason": reason})
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                code = getattr(getattr(e, "rcvd", None), "code", None)
+            self._on_event({"type": "disconnected", "code": code})
+            if code == CLOSE_SIGNALS_REPLACED:
+                return self._on_event({"type": "stopped", "reason": "replaced by a newer connection"})
+            await asyncio.sleep(0 if code == CLOSE_SERVICE_RESTART else backoff)
+            backoff = min(backoff * 2, self._max_backoff)

@@ -21,6 +21,7 @@ import time
 from importlib import resources
 from typing import Any, Optional, Union
 
+from .stream import SignalStream
 from .client import DEFAULT_BASE_URL, AsyncClient
 from .market import MarketLookup
 from .mcp import serve_mcp
@@ -49,6 +50,7 @@ Set PMW_API_KEY (create one on https://pmwallets.com/keys). Every command prints
   pmwallets account                        plan and balance
   pmwallets signals [--source mine] [--category sports] [--q fed]   smart-money signals (Pro and Max)
   pmwallets radar [--minUsd 25000] [--side BUY] [--smart]           large fills, whole market (Pro and Max)
+  pmwallets alerts                         live alerts of your rules, one JSON line each (Pro and Max)
   pmwallets mcp                            MCP server on stdio (tools: leaderboard, entity, subscribe, new_fills, …)
   pmwallets skill                          print the guide for AI agents (SKILL.md)
 
@@ -122,6 +124,14 @@ async def _main(argv: list[str]) -> int:
             # stdout belongs to the protocol: nothing else may be printed there
             markets = MarketLookup()
             await serve_mcp(name="pmwallets", version=VERSION, tools=pmwallets_tools(client, markets=markets), instructions=MCP_INSTRUCTIONS)
+            return 0
+        if cmd == "alerts":
+            if client is None:
+                raise ValueError("set PMW_API_KEY (create a key on https://pmwallets.com/keys)")
+            stream = SignalStream(client, lambda a: print(json.dumps(a), flush=True),
+                                  on_event=lambda e: print(e["reason"], file=sys.stderr) if e["type"] == "stopped" else None)
+            stream.start()
+            await stream.wait()
             return 0
         if cmd == "watch":
             if flags.get("exec") is True:
