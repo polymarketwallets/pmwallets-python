@@ -147,3 +147,42 @@ def test_no_purchased_file_is_pmw_error():
     with pytest.raises(PmwError) as e:
         c.export_file_url(W, "2026-09-25")
     assert e.value.status == 404
+
+
+def test_buy_plan_sends_the_callers_ceiling_and_key_only():
+    calls = []
+    c = Client("pmw_a_b", "https://api.example.com/", http=httpx.Client(transport=transport([{"tier": "pro"}], calls=calls)))
+    c.buy_plan("pro", max_cents=1499, request_id="r-1")
+    assert calls[0].method == "POST" and calls[0].url.path == "/v1/account/plan/balance"
+    assert json.loads(calls[0].content) == {"tier": "pro", "maxCents": 1499, "requestId": "r-1"}
+    with pytest.raises(TypeError):
+        c.buy_plan("pro")  # type: ignore[call-arg]
+
+
+def test_reads_the_remaining_endpoints():
+    calls = []
+    c = Client("pmw_a_b", "https://api.example.com/", http=httpx.Client(transport=transport([{}] * 9, calls=calls)))
+    c.me(); c.markets(); c.invite(); c.invitees(limit=5); c.bind_invite_code("ABC")
+    c.followed_wallet_group(); c.latency_shape(hours=24); c.latency_incidents(); c.quote_plan_change("max")
+    assert [f"{r.method} {r.url.raw_path.decode()}" for r in calls] == [
+        "GET /v1/auth/me", "GET /v1/markets", "GET /v1/account/invite", "GET /v1/account/invite/invitees?limit=5",
+        "POST /v1/account/invite/bind", "GET /v1/account/wallet-groups/subscriptions", "GET /v1/latency/shape?hours=24",
+        "GET /v1/latency/incidents", "POST /v1/account/plan/quote",
+    ]
+
+
+def test_ready_answers_on_503_and_raises_otherwise():
+    down = Client("pmw_a_b", "https://api.example.com/", http=httpx.Client(transport=transport([{"ok": False}], status=503)))
+    assert down.ready() == {"ok": False}
+    broken = Client("pmw_a_b", "https://api.example.com/", http=httpx.Client(transport=transport([{"e": 1}], status=500)))
+    with pytest.raises(PmwError):
+        broken.ready()
+
+
+async def test_async_client_has_the_same_new_methods():
+    calls = []
+    c = AsyncClient("pmw_a_b", "https://api.example.com/", http=httpx.AsyncClient(transport=transport([{"tier": "pro"}, {"ok": True}], calls=calls)))
+    await c.buy_plan("pro", max_cents=1499, request_id="r-1")
+    await c.ready()
+    assert json.loads(calls[0].content) == {"tier": "pro", "maxCents": 1499, "requestId": "r-1"}
+    assert calls[1].url.path == "/v1/ready"

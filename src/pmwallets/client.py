@@ -125,6 +125,27 @@ class Client(_Base):
         """One entity by handle or address. The full address comes back only for entities you own."""
         return self.request("GET", f"/v1/entities/{_q(entity_id)}", {"period": period})
 
+    def ready(self) -> dict[str, Any]:
+        """Whether ingest, push, the board, exports and smart-money files are current. A 503 is an answer here, so it returns the body instead of raising."""
+        try:
+            return self.request("GET", "/v1/ready")
+        except PmwError as e:
+            if e.status == 503 and isinstance(e.body, dict):
+                return e.body
+            raise
+
+    def markets(self) -> dict[str, Any]:
+        """The busiest markets of the 30d window, with counts and sums over traders."""
+        return self.request("GET", "/v1/markets")
+
+    def latency_shape(self, hours: Optional[int] = None) -> dict[str, Any]:
+        """Push latency over time and its histogram. ``hours`` is 1, 24, 168 or 720."""
+        return self.request("GET", "/v1/latency/shape", {"hours": hours})
+
+    def latency_incidents(self) -> dict[str, Any]:
+        """Stretches of the last 30 days where the push median exceeded the threshold."""
+        return self.request("GET", "/v1/latency/incidents")
+
     def latency(self) -> dict[str, Any]:
         return self.request("GET", "/v1/latency")
 
@@ -136,6 +157,35 @@ class Client(_Base):
     def plan(self) -> dict[str, Any]:
         """Your monthly plan (Base / Pro / Max), its period dates and what is used of its allowances."""
         return self.request("GET", "/v1/account/plan")
+
+    def quote_plan_change(self, tier: str) -> dict[str, Any]:
+        """What moving to ``tier`` would do today. Charges nothing."""
+        return self.request("POST", "/v1/account/plan/quote", body={"tier": tier})
+
+    def buy_plan(self, tier: str, *, max_cents: int, request_id: str) -> dict[str, Any]:
+        """Charges the balance for 30 days of a plan, which never renew by themselves.
+
+        ``max_cents`` is a ceiling: the charge never exceeds it. ``request_id`` is your idempotency key: keep it
+        across retries of one purchase, or a retry buys a second period; use a new one for a new purchase.
+        Refused while a card plan is active.
+        """
+        return self.request("POST", "/v1/account/plan/balance", body={"tier": tier, "maxCents": max_cents, "requestId": request_id})
+
+    def me(self) -> dict[str, Any]:
+        """The account behind this key. Use it to check that a key works."""
+        return self.request("GET", "/v1/auth/me")
+
+    def invite(self) -> dict[str, Any]:
+        """Your invite code, the campaign terms, your commission and how many people you invited."""
+        return self.request("GET", "/v1/account/invite")
+
+    def invitees(self, limit: Optional[int] = None, cursor: Optional[str] = None) -> dict[str, Any]:
+        """One page of the people you invited; pass the previous page's ``next`` as ``cursor``."""
+        return self.request("GET", "/v1/account/invite/invitees", {"limit": limit, "cursor": cursor})
+
+    def bind_invite_code(self, code: str) -> dict[str, Any]:
+        """Bind an invite code to your account, once ever. Credits a non-refundable bonus while the campaign runs."""
+        return self.request("POST", "/v1/account/invite/bind", body={"code": code})
 
     def plans(self) -> dict[str, Any]:
         """The plans on sale: price and allowances of Base / Pro / Max."""
@@ -195,6 +245,10 @@ class Client(_Base):
 
     def wallet_groups(self) -> list[dict[str, Any]]:
         return self.request("GET", "/v1/account/wallet-groups")
+
+    def followed_wallet_group(self) -> dict[str, Any]:
+        """The wallets you follow, as a group that keeps itself up to date."""
+        return self.request("GET", "/v1/account/wallet-groups/subscriptions")
 
     def create_wallet_group(self, name: str) -> dict[str, Any]:
         return self.request("POST", "/v1/account/wallet-groups", body={"name": name})
@@ -316,6 +370,27 @@ class AsyncClient(_Base):
     async def entity(self, entity_id: str, period: Optional[str] = None) -> dict[str, Any]:
         return await self.request("GET", f"/v1/entities/{_q(entity_id)}", {"period": period})
 
+    async def ready(self) -> dict[str, Any]:
+        """Whether ingest, push, the board, exports and smart-money files are current. A 503 is an answer here, so it returns the body instead of raising."""
+        try:
+            return await self.request("GET", "/v1/ready")
+        except PmwError as e:
+            if e.status == 503 and isinstance(e.body, dict):
+                return e.body
+            raise
+
+    async def markets(self) -> dict[str, Any]:
+        """The busiest markets of the 30d window, with counts and sums over traders."""
+        return await self.request("GET", "/v1/markets")
+
+    async def latency_shape(self, hours: Optional[int] = None) -> dict[str, Any]:
+        """Push latency over time and its histogram. ``hours`` is 1, 24, 168 or 720."""
+        return await self.request("GET", "/v1/latency/shape", {"hours": hours})
+
+    async def latency_incidents(self) -> dict[str, Any]:
+        """Stretches of the last 30 days where the push median exceeded the threshold."""
+        return await self.request("GET", "/v1/latency/incidents")
+
     async def latency(self) -> dict[str, Any]:
         return await self.request("GET", "/v1/latency")
 
@@ -327,6 +402,35 @@ class AsyncClient(_Base):
     async def plan(self) -> dict[str, Any]:
         """Your monthly plan (Base / Pro / Max), its period dates and what is used of its allowances."""
         return await self.request("GET", "/v1/account/plan")
+
+    async def quote_plan_change(self, tier: str) -> dict[str, Any]:
+        """What moving to ``tier`` would do today. Charges nothing."""
+        return await self.request("POST", "/v1/account/plan/quote", body={"tier": tier})
+
+    async def buy_plan(self, tier: str, *, max_cents: int, request_id: str) -> dict[str, Any]:
+        """Charges the balance for 30 days of a plan, which never renew by themselves.
+
+        ``max_cents`` is a ceiling: the charge never exceeds it. ``request_id`` is your idempotency key: keep it
+        across retries of one purchase, or a retry buys a second period; use a new one for a new purchase.
+        Refused while a card plan is active.
+        """
+        return await self.request("POST", "/v1/account/plan/balance", body={"tier": tier, "maxCents": max_cents, "requestId": request_id})
+
+    async def me(self) -> dict[str, Any]:
+        """The account behind this key. Use it to check that a key works."""
+        return await self.request("GET", "/v1/auth/me")
+
+    async def invite(self) -> dict[str, Any]:
+        """Your invite code, the campaign terms, your commission and how many people you invited."""
+        return await self.request("GET", "/v1/account/invite")
+
+    async def invitees(self, limit: Optional[int] = None, cursor: Optional[str] = None) -> dict[str, Any]:
+        """One page of the people you invited; pass the previous page's ``next`` as ``cursor``."""
+        return await self.request("GET", "/v1/account/invite/invitees", {"limit": limit, "cursor": cursor})
+
+    async def bind_invite_code(self, code: str) -> dict[str, Any]:
+        """Bind an invite code to your account, once ever. Credits a non-refundable bonus while the campaign runs."""
+        return await self.request("POST", "/v1/account/invite/bind", body={"code": code})
 
     async def plans(self) -> dict[str, Any]:
         """The plans on sale: price and allowances of Base / Pro / Max."""
@@ -383,6 +487,10 @@ class AsyncClient(_Base):
 
     async def wallet_groups(self) -> list[dict[str, Any]]:
         return await self.request("GET", "/v1/account/wallet-groups")
+
+    async def followed_wallet_group(self) -> dict[str, Any]:
+        """The wallets you follow, as a group that keeps itself up to date."""
+        return await self.request("GET", "/v1/account/wallet-groups/subscriptions")
 
     async def create_wallet_group(self, name: str) -> dict[str, Any]:
         return await self.request("POST", "/v1/account/wallet-groups", body={"name": name})

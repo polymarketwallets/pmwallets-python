@@ -31,7 +31,7 @@ client.save_signal_rule("signal", {"enabled": True, "scope": "official", "minWal
 
 | | |
 |---|---|
-| `Client` / `AsyncClient` | 排行榜、实体、地址解锁(余额或套餐额度)、我的地址(`my_addresses`)、套餐与余额、订阅、webhook 状态与投递记录、成交补发（`fills`、`fills_since`）、交易历史导出 |
+| `Client` / `AsyncClient` | 排行榜、实体、地址解锁(余额或套餐额度)、我的地址(`my_addresses`)、套餐(报价、用余额购买 `buy_plan`)与余额、邀请、订阅、webhook 状态与投递记录、成交补发（`fills`、`fills_since`）、交易历史导出 |
 | `FillStream` | asyncio WebSocket，自动重连与保活；按 `session`/`seq` 发现漏帧并从最后送达的成交补发；按 `eventId` 去重；首次启动锚定在链头之后；游标持久化 |
 | `verify_webhook(raw_body, signature, secret)` | 校验 `x-pmw-signature`（原始 body 的 HMAC-SHA256） |
 
