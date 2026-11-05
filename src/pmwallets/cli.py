@@ -47,6 +47,8 @@ Set PMW_API_KEY (create one on https://pmwallets.com/keys). Every command prints
   pmwallets fills --since-block <n> [--since-log-index <n>] [--limit 100]
   pmwallets market <tokenId>               the Polymarket question and outcome of a token
   pmwallets account                        plan and balance
+  pmwallets signals [--source mine] [--category sports] [--q fed]   smart-money signals (Pro and Max)
+  pmwallets radar [--minUsd 25000] [--side BUY] [--smart]           large fills, whole market (Pro and Max)
   pmwallets mcp                            MCP server on stdio (tools: leaderboard, entity, subscribe, new_fills, …)
   pmwallets skill                          print the guide for AI agents (SKILL.md)
 
@@ -159,6 +161,8 @@ async def _main(argv: list[str]) -> int:
 
         if cmd == "leaderboard":
             return await call("leaderboard", {k: v for k, v in flags.items() if v is not True})
+        if cmd in ("signals", "radar"):
+            return await call(cmd, {k: (float(v) if k == "minUsd" else v) for k, v in flags.items()})
         if cmd == "entity":
             p = flags.get("period")
             return await call("entity", {"id": pos[0] if pos else None, **({"period": p} if isinstance(p, str) else {})})

@@ -16,6 +16,17 @@ pip install pmwallets     # Python ≥ 3.10
 
 在 [pmwallets.com/keys](https://pmwallets.com/keys) 创建 API key。用法示例见 [README.md](README.md#usage)。
 
+
+## 信号与雷达(Pro 和 Max)
+
+```python
+entries = client.signals(category="sports")["entries"]
+big = client.radar(minUsd=25000, smart=True)
+client.save_signal_rule("signal", {"enabled": True, "scope": "official", "minWallets": 3, "windowMin": 30, "minUsd": 5000, "channels": ["ws", "webhook"]})
+```
+
+实时告警走 `wss://api.pmwallets.com/v1/signals/ws`,帧为 `{type: 'signal' | 'radar', data}`。金额保留两位有效数字,时间到分钟,交易者只给代号。
+
 ## 包含什么
 
 | | |

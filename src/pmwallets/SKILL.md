@@ -21,6 +21,8 @@ Both also run as MCP servers (`pmwallets mcp`, `pmwallets-copytrade mcp --config
 
 ```bash
 pmwallets leaderboard --period 30d --minWinLo 0.55 --category politics --limit 20
+pmwallets signals --category sports      # Pro and Max: several smart wallets buying one side
+pmwallets radar --minUsd 25000 --smart    # Pro and Max: large fills across the market
 pmwallets entity <handle>                 # one trader's stats; a handle is 12 characters, e.g. 7KQ2MF9X4B1C
 pmwallets subscribe <handle>              # BILLS the account per hour (or uses the plan); 402 = balance too low
 pmwallets subscriptions

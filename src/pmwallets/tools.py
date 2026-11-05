@@ -203,6 +203,12 @@ def pmwallets_tools(client: Optional[AsyncClient], *, markets: Optional[MarketLo
     async def market(a: dict) -> Any:
         return (await (mk or MarketLookup()).by_token(ident(a.get("tokenId"), "tokenId"))) or {"error": "not found"}
 
+    async def signals(a: dict) -> Any:
+        return await need().signals(**a)
+
+    async def radar(a: dict) -> Any:
+        return await need().radar(**a)
+
     async def account(a: dict) -> Any:
         c = need()
         plan, billing = await asyncio.gather(c.plan(), c.billing())
@@ -212,6 +218,12 @@ def pmwallets_tools(client: Optional[AsyncClient], *, markets: Optional[MarketLo
         McpTool("leaderboard",
                 "Polymarket traders ranked by realized PnL and other stats over a window, with filters. Each row is an entity (one trader, possibly several wallets).",
                 _obj(BOARD_FILTERS), leaderboard),
+        McpTool("signals",
+                "Markets where several smart-money wallets bought one side in a short time (Pro and Max plans). Amounts are rounded, wallets are named by handle.",
+                _obj({"source": _str('"official" (default) or "mine"'), "category": _str("market category"), "q": _str("words in the market title")}), signals),
+        McpTool("radar",
+                "Large taker fills across the whole market (Pro and Max plans). Amounts are rounded, the trader is a handle and a PnL band.",
+                _obj({"minUsd": {"type": "number", "description": "5000, 10000, 25000, 50000, 100000, 250000 or 1000000"}, "side": _str('"BUY" or "SELL"'), "smart": {"type": "boolean", "description": "official smart money only"}, "category": _str("market category"), "q": _str("words in the market title")}), radar),
         McpTool("entity", "One trader's statistics by handle or address (full address only once unlocked).",
                 _obj({"id": _str("12-character handle or 0x address"), "period": _str('"30d" or "7d"')}, ["id"]), entity),
         McpTool("subscriptions", "The traders this account follows (active and paused subscriptions).", _obj({}), subscriptions),

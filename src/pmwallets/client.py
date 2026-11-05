@@ -38,6 +38,11 @@ class _Base:
         return ("ws" + self.base_url[4:] if self.base_url.startswith("http") else self.base_url) + "/v1/ws"
 
     @property
+    def signals_ws_url(self) -> str:
+        """Where the alerts of your signal and radar rules arrive, as {type: "signal" | "radar", data}."""
+        return self.ws_url.removesuffix("/v1/ws") + "/v1/signals/ws"
+
+    @property
     def _headers(self) -> dict[str, str]:
         return {"x-api-key": self.api_key, "accept": "application/json"}
 
@@ -174,6 +179,37 @@ class Client(_Base):
         return self.request("GET", "/v1/account/reveals")
 
     # ── subscriptions
+    def signals(self, **query: Any) -> dict[str, Any]:
+        """Markets where several smart-money wallets bought one side (Pro and Max). source="mine" lists your own rule's."""
+        return self.request("GET", "/v1/signals", query=query)
+
+    def radar(self, smart: bool = False, **query: Any) -> dict[str, Any]:
+        """Large taker fills across the whole market (Pro and Max). minUsd is 5000, 10000, 25000, 50000, 100000, 250000 or 1000000."""
+        return self.request("GET", "/v1/radar", query={**query, **({"smart": "1"} if smart else {})})
+
+    def signal_rules(self) -> dict[str, Any]:
+        return self.request("GET", "/v1/account/signal-rules")
+
+    def save_signal_rule(self, kind: str, rule: dict[str, Any]) -> dict[str, Any]:
+        return self.request("PUT", f"/v1/account/signal-rules/{_q(kind)}", body=rule)
+
+    def wallet_groups(self) -> list[dict[str, Any]]:
+        return self.request("GET", "/v1/account/wallet-groups")
+
+    def create_wallet_group(self, name: str) -> dict[str, Any]:
+        return self.request("POST", "/v1/account/wallet-groups", body={"name": name})
+
+    def edit_wallet_group(self, group_id: str, **change: Any) -> dict[str, Any]:
+        """name, add, remove: wallets are handles, or addresses you paid to unlock."""
+        return self.request("PATCH", f"/v1/account/wallet-groups/{_q(group_id)}", body=change)
+
+    def quick_add_wallets(self, group_id: str, count: int, **filters: Any) -> dict[str, Any]:
+        """Fill a group with the board's best traders matching the filters; count is 10, 20, 50 or 100."""
+        return self.request("POST", f"/v1/account/wallet-groups/{_q(group_id)}/quick-add", body={"count": count, **filters})
+
+    def delete_wallet_group(self, group_id: str) -> Any:
+        return self.request("DELETE", f"/v1/account/wallet-groups/{_q(group_id)}")
+
     def subscriptions(self) -> list[Subscription]:
         """Active and paused subscriptions, newest first."""
         return self.request("GET", "/v1/account/subscriptions")
@@ -330,6 +366,37 @@ class AsyncClient(_Base):
 
     async def reveals(self) -> list[dict[str, Any]]:
         return await self.request("GET", "/v1/account/reveals")
+
+    async def signals(self, **query: Any) -> dict[str, Any]:
+        """Markets where several smart-money wallets bought one side (Pro and Max). source="mine" lists your own rule's."""
+        return await self.request("GET", "/v1/signals", query=query)
+
+    async def radar(self, smart: bool = False, **query: Any) -> dict[str, Any]:
+        """Large taker fills across the whole market (Pro and Max). minUsd is 5000, 10000, 25000, 50000, 100000, 250000 or 1000000."""
+        return await self.request("GET", "/v1/radar", query={**query, **({"smart": "1"} if smart else {})})
+
+    async def signal_rules(self) -> dict[str, Any]:
+        return await self.request("GET", "/v1/account/signal-rules")
+
+    async def save_signal_rule(self, kind: str, rule: dict[str, Any]) -> dict[str, Any]:
+        return await self.request("PUT", f"/v1/account/signal-rules/{_q(kind)}", body=rule)
+
+    async def wallet_groups(self) -> list[dict[str, Any]]:
+        return await self.request("GET", "/v1/account/wallet-groups")
+
+    async def create_wallet_group(self, name: str) -> dict[str, Any]:
+        return await self.request("POST", "/v1/account/wallet-groups", body={"name": name})
+
+    async def edit_wallet_group(self, group_id: str, **change: Any) -> dict[str, Any]:
+        """name, add, remove: wallets are handles, or addresses you paid to unlock."""
+        return await self.request("PATCH", f"/v1/account/wallet-groups/{_q(group_id)}", body=change)
+
+    async def quick_add_wallets(self, group_id: str, count: int, **filters: Any) -> dict[str, Any]:
+        """Fill a group with the board's best traders matching the filters; count is 10, 20, 50 or 100."""
+        return await self.request("POST", f"/v1/account/wallet-groups/{_q(group_id)}/quick-add", body={"count": count, **filters})
+
+    async def delete_wallet_group(self, group_id: str) -> Any:
+        return await self.request("DELETE", f"/v1/account/wallet-groups/{_q(group_id)}")
 
     async def subscriptions(self) -> list[Subscription]:
         return await self.request("GET", "/v1/account/subscriptions")

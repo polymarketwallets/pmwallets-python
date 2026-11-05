@@ -142,7 +142,7 @@ async def test_mcp_offers_the_latest_protocol_to_an_unknown_version():
     assert m["result"]["protocolVersion"] == "2025-06-18"
 
 
-def test_mcp_over_real_stdio_lists_the_nine_tools(tmp_path):
+def test_mcp_over_real_stdio_lists_the_tools(tmp_path):
     msgs = "\n".join(json.dumps(m) for m in [
         {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05"}},
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
@@ -154,7 +154,7 @@ def test_mcp_over_real_stdio_lists_the_nine_tools(tmp_path):
     assert out[0]["result"]["instructions"] == MCP_INSTRUCTIONS
     assert out[0]["result"]["serverInfo"] == {"name": "pmwallets", "version": pmwallets.VERSION}
     assert [t["name"] for t in out[1]["result"]["tools"]] == [
-        "leaderboard", "entity", "subscriptions", "subscribe", "cancel_subscription", "new_fills", "fills", "market", "account"]
+        "leaderboard", "signals", "radar", "entity", "subscriptions", "subscribe", "cancel_subscription", "new_fills", "fills", "market", "account"]
 
 
 def row(block, log_index):
@@ -231,7 +231,7 @@ async def test_every_tool_tells_an_agent_how_to_fix_a_missing_api_key(tmp_path):
     sub = next(t for t in tools if t.name == "subscriptions")
     with pytest.raises(RuntimeError, match="PMW_API_KEY"):
         await sub.handler({})
-    assert len(tools) == 9
+    assert len(tools) == 11
 
 
 def test_version_matches_pyproject():
